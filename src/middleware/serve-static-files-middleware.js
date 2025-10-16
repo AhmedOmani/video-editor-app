@@ -19,8 +19,10 @@ const static = (rootDir) => {
         }
 
         let requestPath = req.rawReq.url;
-
-        if (requestPath === "/") requestPath = "/index.html";
+        
+        // Frontend page calls
+        if (requestPath === "/" || requestPath === "/profile" || requestPath === "/login" || requestPath === "/new-post") 
+            requestPath = "/index.html";
 
         // fullpath: ../public/index.html
         const fullPath = path.join("../", path.join(rootDir , requestPath));

@@ -1,14 +1,22 @@
+const config = require("./config");
 const { Omix } = require("../Omix-Framework/Omix");
-const { static } = require("../middleware/serve-static-files-middleware");
-require("dotenv").config({ path : "../.env"});
+const { generate } = require("./db/db.js");
+const { static } = require("./middleware/serve-static-files-middleware");
+const { authMiddleware } = require("./middleware/auth.middleware.js");
+const { login , logout } = require("./controllers/auth.controller.js");
+const bcrypt = require("bcrypt");
 
-const PORT = process.env.PORT;
+const PORT = config.server.port;
 
 const omix = new Omix();
 
 omix.use(static("./public"));
 
-console.log(PORT);
-omix.listen(PORT , () => {
+//Auth-routes
+omix.post("/api/login" , login);
+omix.delete("/api/logout" , authMiddleware , logout);
+
+omix.listen(PORT , async () => {
+    await generate();
     console.log(`Omix server is up on port ${PORT}`);
 });
