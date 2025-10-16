@@ -25,20 +25,31 @@ async function createUserTable() {
         );`)
 }
 
-async function createSessionTable() {
-    await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`)
+async function createVideoTable() {
     await pool.query(`
-            CREATE TABLE IF NOT EXISTS sessions (
-            token TEXT PRIMARY KEY,
-            user_id UUID NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );`
-        );
+        CREATE TABLE IF NOT EXISTS videos (
+            id SERIAL PRIMARY KEY,
+            video_id VARCHAR(8) UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            extension VARCHAR(10) NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            extracted_audio BOOLEAN DEFAULT FALSE,
+            resizes JSONB DEFAULT '{}',
+            file_size BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_videos_user_id ON videos(user_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_videos_video_id ON videos(video_id)`);
 }
 
 async function generate() {
     await createUserTable();
-    await createSessionTable();
+    await createVideoTable();
 }
 
 process.on("SIGINT", async () => {
