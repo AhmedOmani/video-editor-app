@@ -1,10 +1,15 @@
 const fs = require("node:fs");
 const fss = require("node:fs/promises");
+const { pipeline } = require("node:stream/promises");
 
 class OmixResponse {
     constructor(res) {
         this.rawRes = res;
         this.statusCode = 200;
+    }
+
+    headersSent() {
+        return this.rawRes.headersSent
     }
 
     status(code) {
@@ -50,6 +55,27 @@ class OmixResponse {
 
     end(data) {
         this.rawRes.end(data);
+    }
+
+    async pipe(readableStream) {
+        try {    
+            return await pipeline(readableStream, this.rawRes);
+        } catch (error) {
+            // Handle premature close gracefully
+            if (error.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+                console.log('Client disconnected during asset streaming');
+                return; // Don't throw, just return
+            }
+            
+            // Handle other stream errors
+            if (error.code === 'ECONNRESET' || error.code === 'EPIPE') {
+                console.log('Connection reset during asset streaming');
+                return; // Don't throw, just return
+            }
+            
+            console.log("Error while reading asset:", error.message);
+            throw error; // Re-throw other errors
+        }
     }
 }
 

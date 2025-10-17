@@ -3,6 +3,12 @@ const { pipeline } = require("node:stream/promises");
 class OmixRequest {
     constructor(req, params , searchUrls) {
         this.rawReq = req ;
+        this.params = params;
+        this.queryParam = searchUrls
+    }
+
+    queryParams() {
+        return this.queryParam;
     }
 
     headers() {

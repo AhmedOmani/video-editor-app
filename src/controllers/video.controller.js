@@ -94,7 +94,7 @@ const getVideoAssets = async (req , res) => {
     const videoId = params.get("videoId");
     const type = params.get("type");
     //somecases it will be null
-    const dimenstion = params.get("dimensions");
+    const dimentions = params.get("dimensions");
 
     try {
         const video = await videoRepo.getVideoById(videoId , userId);
@@ -115,14 +115,14 @@ const getVideoAssets = async (req , res) => {
             case 'audio':
                 filePath = storage.getFilePath(videoId, 'audio.aac');
             case 'resize':
-                filePath = storage.getFilePath(videoId, `${dimensions}.${video.extension}`);
+                filePath = storage.getFilePath(videoId, `${dimentions}.${video.extension}`);
                 break;
             default:
                 return res.status(400).json({ error: 'Invalid asset type' });
         }
 
         //check if the file exists
-        if (!await storage.fileExists(videoId, `${type === 'thumbnail' ? 'thumbnail.jpg' : type === 'audio' ? 'audio.aac' : dimensions !== null ? `${dimensions}.${video.extension}` : `original.${video.extension}`}`)) {
+        if (!await storage.fileExists(videoId, `${type === 'thumbnail' ? 'thumbnail.jpg' : type === 'audio' ? 'audio.aac' : dimentions !== null ? `${dimentions}.${video.extension}` : `original.${video.extension}`}`)) {
             return res.status(404).json({ error: `Asset ${type} not found` });
         }
         
