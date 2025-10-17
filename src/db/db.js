@@ -32,13 +32,13 @@ async function createVideoTable() {
             video_id VARCHAR(8) UNIQUE NOT NULL,
             name TEXT NOT NULL,
             extension VARCHAR(10) NOT NULL,
-            width INTEGER NOT NULL,
-            height INTEGER NOT NULL,
+            dimensions JSONB DEFAULT '{"width": 0, "height": 0}',
             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            original_filename TEXT,
             extracted_audio BOOLEAN DEFAULT FALSE,
             resizes JSONB DEFAULT '{}',
+            original_filename TEXT,
             file_size BIGINT,
+            duration INTEGER,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )

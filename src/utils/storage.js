@@ -17,6 +17,16 @@ class StorageManager {
         return path.join(this.getVideoPath(videoId) , filename);
     } 
 
+    async fileExists(videoId , filename) {
+        
+        try {
+            await fs.access(this.getFilePath(videoId , filename));
+            return true;
+        } catch(error) {
+            return false;
+        }
+    }
+
     async createVideoFolder(videoId , filename) {
         const folderPath = this.getVideoPath(videoId);
         await fs.mkdir(folderPath , { recursive: true});

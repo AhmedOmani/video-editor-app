@@ -33,7 +33,7 @@ const login = async (req , res) => {
 
         const token = generateToken(user.id);
         
-        res.setHeader("Set-Cookie" , `token=${token}; Path=/; HttpOnly; ${config.cookie.secure ? 'Secure;' : ''} SameSite=${config.cookie.sameSite}; Max-Age=86400`)
+        res.setHeader("Set-Cookie" , `token=${token}; Path=/; Max-Age=86400`)
            .status(200)
            .json({
                 message: "User logged in successfully" ,
@@ -51,7 +51,9 @@ const login = async (req , res) => {
 }
 
 const logout = async (req , res) => {
-    res.setHeader("Set-Cookie", `; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`);
+    res.setHeader("Set-Cookie", 
+        `token=; Path=/; HttpOnly; ${config.cookie.secure ? 'Secure;' : ''} SameSite=${config.cookie.sameSite}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
+    );
     res.json({
         message: "User logged out successfully"
     });

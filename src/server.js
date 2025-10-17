@@ -6,7 +6,6 @@ const { authMiddleware } = require("./middleware/auth.middleware.js");
 const { globalLoggerMiddleware } = require("./middleware/global-logger.middleware.js"); 
 const Auth = require("./controllers/auth.controller.js");
 const Video = require("./controllers/video.controller.js");
-const bcrypt = require("bcrypt");
 
 const PORT = config.server.port;
 
@@ -15,12 +14,20 @@ const omix = new Omix();
 omix.use(globalLoggerMiddleware);
 omix.use(static("./public"));
 
+omix.get("/api/user", authMiddleware, (req, res) => {
+    res.json({
+        id: req.userId,
+        message: "User is authenticated"
+    });
+});
 //Auth-routes
 omix.post("/api/login" , Auth.login);
 omix.delete("/api/logout" , authMiddleware , Auth.logout);
 
 //Videos-routes
+omix.get("/api/videos" , authMiddleware , Video.getVideos);
 omix.post("/api/upload-video" , authMiddleware , Video.uploadVideo);
+omix.get("/get-video-asset" , authMiddleware , Video.getVideoAssets);
 
 omix.listen(PORT , async () => {
     await generate();

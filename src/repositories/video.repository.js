@@ -1,5 +1,6 @@
 const { pool } = require("../db/db.js");
 
+
 const createVideo = async (videoMetadata) => {
     const {
         videoId,
@@ -10,16 +11,27 @@ const createVideo = async (videoMetadata) => {
         userId,
         originalFilename,
         fileSize,
+        duration
     } = videoMetadata;
 
     const result = await pool.query(`
         INSERT INTO videos (
-            video_id, name, extension, width, height, user_id,original_filename, file_size
+            video_id, name, extension, dimensions, user_id, 
+            original_filename, file_size, duration
         ) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-        RETURNING *` , 
-        [videoId, name, extension, width, height, userId, 
-        originalFilename, fileSize]);
+        RETURNING *`, 
+        [
+            videoId, 
+            name, 
+            extension, 
+            JSON.stringify({ width, height }), // Store as JSON
+            userId, 
+            originalFilename, 
+            fileSize,
+            duration,
+        ]
+    );
 
     return result.rows[0];
 };
@@ -29,12 +41,27 @@ const getVideoById = async (videoId , userId) => {
         `SELECT * FROM videos WHERE video_id = $1 AND user_id = $2`,
         [videoId , userId]
     );
-    return result.rows;
+    return result.rows[0];
 };
 
 const getUserVideos = async (userId) => {
     const result = await pool.query(`
-        SELECT * FROM videos WHERE user_id = $1 ORDER BY created_at DESC`,
+        SELECT 
+            id,
+            video_id as "videoId",  -- Alias video_id to videoId
+            name,
+            extension,
+            dimensions,
+            user_id as "userId",    -- Also alias user_id to userId
+            original_filename as "originalFilename",
+            extracted_audio as "extractedAudio",
+            resizes,
+            file_size as "fileSize",
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+        FROM videos 
+        WHERE user_id = $1 
+        ORDER BY created_at DESC`,
         [userId]
     );
     return result.rows;
