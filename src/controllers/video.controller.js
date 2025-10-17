@@ -3,8 +3,12 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const storage = require("../utils/storage.js");
 const videoRepo = require("../repositories/video.repository.js");
+const videoProcessor = require("../utils/videoProcessor.js");
 
 const uploadVideo = async (req , res) => {
+
+    //TODO: handle unsupported file types.
+
     const requestHeaders = req.headers();
 
     //extracting file metadata
@@ -17,28 +21,31 @@ const uploadVideo = async (req , res) => {
 
     try {
         await storage.createVideoFolder(videoId);
-        const fileFullPath = storage.getFilePath(videoId, `original.${extension}`);
+        const videoFullPath = storage.getFilePath(videoId, `original.${extension}`);
 
         //open file and start streaming the content of the uploaded file.
-        fileHandler = await fs.open(fileFullPath, "w");
+        fileHandler = await fs.open(videoFullPath, "w");
         const fileWriteStream = fileHandler.createWriteStream(fileHandler);
         await req.pipe(fileWriteStream);
 
-        // TODO: Make the thumbnail of the video.
-        // TODO: Get the dimenstions of the video.
+        // Get the Metadata of the video.
+        const metadata = await videoProcessor.getVideoMetadata(videoFullPath);
 
-        const fileStats = await fs.stat(fileFullPath);
+        // Generate the thumbnail of the video.
+        const thumbnailPath = storage.getFilePath(videoId , `thumbnail.jpg`);
+        await videoProcessor.generateThumbnail(videoFullPath , thumbnailPath);
+
+        const fileStats = await fs.stat(videoFullPath);
 
         const videoMetadata = {
             videoId: videoId,       
             name: fileBasename,
             extension: extension, 
-            width: 0,
-            height: 0,
+            width: metadata.width,
+            height: metadata.height,
             userId: req.userId, 
             originalFilename: filename,
             fileSize: fileStats.size,
-            duration: null
         };
 
         const savedVideo = await videoRepo.createVideo(videoMetadata);

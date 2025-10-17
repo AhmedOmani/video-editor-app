@@ -25,6 +25,10 @@ const config = {
     storage: {
         basePath : process.env.STORAGE_PATH || path.resolve(__dirname , "../../storage"),
         maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 500 * 1024 * 1024,
+    },
+    ffmpeg: {
+        ffmpeg: process.env.FFMPEG_PATH,
+        ffprobe: process.env.FFPROBE_PATH
     }
 }
 

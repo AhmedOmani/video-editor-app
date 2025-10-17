@@ -1,3 +1,5 @@
+const { pipeline } = require("node:stream/promises");
+
 class OmixRequest {
     constructor(req, params , searchUrls) {
         this.rawReq = req ;
@@ -25,6 +27,19 @@ class OmixRequest {
                 }
             }); 
         });
+    }
+
+    async pipe(writableStream) {
+        try {    
+            return await pipeline(this.rawReq , writableStream);
+        } catch (error) {
+            if (error.code === 'ECONNRESET' || error.code === 'EPIPE') {
+                const abortError = new Error("Upload aborted by client");
+                abortError.code = "UPLOAD_APORTED";
+                throw abortError;
+            }
+            throw error;
+        }
     }
 }
 
