@@ -1,4 +1,5 @@
 require("dotenv").config({path : "/home/hp/video-editor-app/.env"});
+const path = require("node:path");
 
 const config = {
     database: {
@@ -20,6 +21,10 @@ const config = {
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'Strict',
         httpOnly: true,
+    },
+    storage: {
+        basePath : process.env.STORAGE_PATH || path.resolve(__dirname , "../../storage"),
+        maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 500 * 1024 * 1024,
     }
 }
 
