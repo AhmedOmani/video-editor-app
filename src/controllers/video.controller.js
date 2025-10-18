@@ -1,6 +1,5 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const {pipeline} = require("node:stream/promises");
 
 const crypto = require("node:crypto");
 const storage = require("../utils/storage.js");
@@ -114,6 +113,7 @@ const getVideoAssets = async (req , res) => {
                 break;
             case 'audio':
                 filePath = storage.getFilePath(videoId, 'audio.aac');
+                break;
             case 'resize':
                 filePath = storage.getFilePath(videoId, `${dimentions}.${video.extension}`);
                 break;
@@ -152,7 +152,9 @@ const getVideoAssets = async (req , res) => {
         const readFileStream = fileHandler.createReadStream();
 
         if (type !== "thumbnail") {
-            res.setHeader("Content-Disposition" , `attachment; filename=${video.original_filename}`);
+            const extension = path.extname(filePath);
+            const downloadedFilename = `${video.name}.${extension}`;
+            res.setHeader("Content-Disposition" , `attachment; filename=${downloadedFilename}`);
         }
 
         readFileStream.on("error" , (error) => {
@@ -171,9 +173,11 @@ const getVideoAssets = async (req , res) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
-        await res.pipe(readFileStream)
+
+        await res.pipe(readFileStream);
     
         fileHandler.close();
+        
     } catch (error) {
         console.error('Asset serving error:', error);
         
@@ -191,8 +195,58 @@ const getVideoAssets = async (req , res) => {
     }
     
 }
+
+const extractAudio = async (req , res) => {
+    const params = req.queryParams();
+    const videoId = params.get("videoId");
+    let audioPath;
+    try {
+        const video = await videoRepo.getVideoById(videoId);
+
+        if (!video) {
+            return res.status(404).json({
+                message: "Video not found"
+            });
+        } 
+        if (video.extracted_audio === true) {
+            return res.status(400).json({
+                message: "Audio has already been extracted"
+            });
+        }
+        
+        const videoPath = storage.getFilePath(videoId , `original.${video.extension}`);
+        audioPath = storage.getFilePath(videoId , "audio.aac");
+
+        //check if video has audio stream or not.
+        const hasAudio = await videoProcessor.hasAudioStream(videoPath);
+        if (!hasAudio) {
+            return res.status(400).json({
+                message: "Video does not contain an audio track to extract"
+            });
+        }
+        
+        await videoProcessor.extractAudio(videoPath, audioPath);
+        await videoRepo.updateAudioState(videoId);
+
+        res.status(200).json({
+            status: "success",
+            message: "Audio extracted successfully",
+            audioPath: audioPath
+        });
+
+    } catch(error) {
+        console.error("Audio extraction error:", error);
+        storage.deleteAudioFile(audioPath);
+        res.status(500).json({
+            message: "Failed to extract audio",
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     uploadVideo,
     getVideos,
-    getVideoAssets
+    getVideoAssets,
+    extractAudio
 };

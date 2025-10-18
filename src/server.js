@@ -27,6 +27,7 @@ omix.delete("/api/logout" , authMiddleware , Auth.logout);
 //Videos-routes
 omix.get("/api/videos" , authMiddleware , Video.getVideos);
 omix.post("/api/upload-video" , authMiddleware , Video.uploadVideo);
+omix.patch("/api/video/extract-audio" , authMiddleware , Video.extractAudio);
 omix.get("/get-video-asset" , authMiddleware , Video.getVideoAssets);
 
 omix.listen(PORT , async () => {

@@ -96,11 +96,43 @@ class VideoProcessor {
         })
     }
 
+    async hasAudioStream(videoPath) {
+        return new Promise((resolve, reject) => {
+            const ffprobe = spawn(this.ffprobeCommand, [
+                '-v', 'quiet',
+                '-select_streams', 'a',
+                '-show_entries', 'stream=codec_type',
+                '-of', 'csv=p=0',
+                videoPath
+            ]);
+    
+            let output = '';
+            ffprobe.stdout.on('data', (chunk) => {
+                output += chunk.toString();
+            });
+    
+            ffprobe.on('close', (code) => {
+                resolve(output.trim() === 'audio');
+            });
+    
+            ffprobe.on('error', (err) => {
+                reject(err);
+            });
+        });
+    }
+    
     async extractAudio(videoPath , audioPath) {
         return new Promise((resolve , reject) => {
-            const ffmpeg = spawn(this.ffmpegCommand , [
-                '-', videoPath , '-vn', '-acodec',
-                'aac', '-ab' , '128k', audioPath , '-y'
+            const ffmpeg = spawn(this.ffmpegCommand, [
+                '-i', videoPath,        
+                '-vn',                  
+                '-acodec', 'aac',       
+                '-ab', '128k',          
+                '-ac', '2',             
+                '-ar', '44100',         
+                '-f', 'adts',           
+                audioPath,              
+                '-y'                    
             ]);
 
             let errorOutput = "";

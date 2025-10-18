@@ -42,6 +42,16 @@ class StorageManager {
         }
     }
 
+    async deleteAudioFile(audioPath) {
+        try {
+            if (this.fileExists(audioPath)) {
+                await fs.unlink(audioPath);
+            }
+        } catch(error) {
+            console.log("Error while deleting audio file: " , error);
+        }
+    }
+
 }
 
 module.exports = new StorageManager();

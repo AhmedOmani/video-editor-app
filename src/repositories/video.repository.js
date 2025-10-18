@@ -36,10 +36,10 @@ const createVideo = async (videoMetadata) => {
     return result.rows[0];
 };
 
-const getVideoById = async (videoId , userId) => {
+const getVideoById = async (videoId) => {
     const result = await pool.query(
-        `SELECT * FROM videos WHERE video_id = $1 AND user_id = $2`,
-        [videoId , userId]
+        `SELECT * FROM videos WHERE video_id = $1`,
+        [videoId]
     );
     return result.rows[0];
 };
@@ -67,8 +67,14 @@ const getUserVideos = async (userId) => {
     return result.rows;
 };
 
+const updateAudioState = async (videoId) => {
+    const result = await pool.query(`UPDATE videos SET extracted_audio = true WHERE video_id = $1` , [videoId]);
+    return result.rows[0];
+}
+
 module.exports = {
     createVideo,
     getVideoById,
-    getUserVideos
+    getUserVideos,
+    updateAudioState
 };
