@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const storage = require("../utils/storage.js");
 const videoRepo = require("../repositories/video.repository.js");
 const videoProcessor = require("../utils/videoProcessor.js");
+const jobQueue = require("../utils/jobQueue.js");
 
 const getVideos = async (req , res) => {
     const userId = req.userId;
@@ -143,7 +144,7 @@ const getVideoAssets = async (req , res) => {
                 mimeType = "audio/aac";
                 break;
             case "resize":
-                fileHandled = await fs.open(filePath , "r");
+                fileHandler = await fs.open(filePath , "r");
                 mimeType = "video/mp4";
                 break;
             // audio , resize , original
@@ -177,7 +178,7 @@ const getVideoAssets = async (req , res) => {
         await res.pipe(readFileStream);
     
         fileHandler.close();
-        
+
     } catch (error) {
         console.error('Asset serving error:', error);
         
@@ -236,7 +237,7 @@ const extractAudio = async (req , res) => {
 
     } catch(error) {
         console.error("Audio extraction error:", error);
-        storage.deleteAudioFile(audioPath);
+        storage.deleteFile(audioPath);
         res.status(500).json({
             message: "Failed to extract audio",
             error: error.message
@@ -244,9 +245,54 @@ const extractAudio = async (req , res) => {
     }
 }
 
+const resizeVideo = async (req , res) => {
+    const data = await req.body();
+    const videoId = data.videoId;
+    const width = Number(data.width);
+    const height = Number(data.height);
+
+    try {
+        const video = await videoRepo.getVideoById(videoId);
+        if (!video) {
+            return res.status(404).json({
+                message: "Video not found!"
+            });
+        }
+        if (width <= 0 || height <= 0) {
+            return res.status(400).json({
+                message: "Width and height should be greater than 0"
+            });
+        }
+        if (width >= video.dimensions.width || height >= video.dimensions.height) {
+            return res.status(400).json({
+                message: "Resize dimensions should be smaller than original dimensions"
+            });
+        }
+        await videoRepo.updateResizeProcessingStatus(videoId, { width, height }, true);
+        
+        jobQueue.enqueue({
+            type: "resize",
+            videoId: videoId,
+            width: width,
+            height: height,
+            res: res
+        });
+    
+        res.status(200).json({
+            status: "success",
+            message: "Resize process has successfully started! This process could take uo to a few hour. Please check back later"
+        });
+
+    } catch(error) {
+        console.log("Error while scheduling resize process: " , error);
+    }
+    
+}
+
 module.exports = {
     uploadVideo,
     getVideos,
     getVideoAssets,
-    extractAudio
+    extractAudio,
+    resizeVideo
 };

@@ -70,11 +70,49 @@ const getUserVideos = async (userId) => {
 const updateAudioState = async (videoId) => {
     const result = await pool.query(`UPDATE videos SET extracted_audio = true WHERE video_id = $1` , [videoId]);
     return result.rows[0];
-}
+};
+
+const updateResizeProcessingStatus = async (videoId , dimensions , processing) => {
+    const resizeKey = `${dimensions.width}x${dimensions.height}`;
+    
+    console.log("DEBUG - resizeKey:", resizeKey);
+    console.log("DEBUG - processing:", processing);
+    console.log("DEBUG - videoId:", videoId);
+
+    // Use direct JSONB merge
+    const result = await pool.query(`
+        UPDATE videos 
+        SET resizes = COALESCE(resizes, '{}'::jsonb) || $1::jsonb
+        WHERE video_id = $2
+        RETURNING resizes
+    `, [JSON.stringify({[resizeKey]: {processing}}), videoId]);
+
+    console.log("DEBUG - Updated resizes:", result.rows[0]?.resizes);
+    
+    return result.rows[0];
+};
+
+const updateFormatProcessingStatus = async (videoId, format, processing) => {
+    console.log("DEBUG - format:", format);
+    console.log("DEBUG - processing:", processing);
+    console.log("DEBUG - videoId:", videoId);
+
+    const result = await pool.query(`
+        UPDATE videos 
+        SET formats = COALESCE(formats, '{}'::jsonb) || $1::jsonb
+        WHERE video_id = $2
+        RETURNING formats
+    `, [JSON.stringify({[format]: {processing}}), videoId]);
+
+    console.log("DEBUG - Updated formats:", result.rows[0]?.formats);
+    
+    return result.rows[0];
+};
 
 module.exports = {
     createVideo,
     getVideoById,
     getUserVideos,
-    updateAudioState
+    updateAudioState,
+    updateResizeProcessingStatus
 };

@@ -156,11 +156,14 @@ class VideoProcessor {
     }
 
     async videoResize(videoPath , outputPath, width , height) {
+        console.log(videoPath);
+        console.log(outputPath);
         return new Promise((resolve , reject) => {
-            const ffmpeg = spawn(this.ffmpegPath , [
+            const ffmpeg = spawn(this.ffmpegCommand , [
                 '-i' , videoPath ,
                 '-vf' , `scale=${width}:${height}`,
                 '-c:v' , 'libx264',
+                '-c:a' , 'aac',
                 '-preset' , 'medium',
                 '-crf' , '23',
                 outputPath,
