@@ -106,16 +106,17 @@ class VideoProcessor {
                 '-of', 'csv=p=0',
                 videoPath
             ]);
-    
+
             let output = '';
             ffprobe.stdout.on('data', (chunk) => {
                 output += chunk.toString();
             });
-    
-            ffprobe.on('close', (code) => {
-                resolve(output.trim() === 'audio');
+
+            ffprobe.on('close', () => {
+                const normalized = output.trim().toLowerCase();
+                resolve(normalized.includes('audio'));
             });
-    
+
             ffprobe.on('error', (err) => {
                 reject(err);
             });

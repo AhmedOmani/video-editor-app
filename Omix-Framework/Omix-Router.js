@@ -15,11 +15,18 @@ class OmixRouter {
     }
 
     addRoute(method , path , handler, middleware = []) {
+        const upperMethod = method.toUpperCase();
+        if (path === "/") {
+            this.root.handlers[upperMethod] = {
+                handler: handler,
+                middleware: middleware
+            };
+            return;
+        }
         // eg. users/:id/posts
         // segments = ['users' , ':id' , 'posts']
         const segments = path.split("/").filter(s => s.length > 0);
         let currentNode = this.root ;
-        const upperMethod = method.toUpperCase();
 
         //each segement is one low level before the last segment
         //  users 
@@ -55,6 +62,19 @@ class OmixRouter {
     };
 
     matchRoute(method , path) {
+        //handle root path specialy
+        if (path === "/") {
+            const routeData = this.root.handlers[method.toUpperCase()];
+            if (routeData) {
+                return {
+                    handler: routeData.handler,
+                    params: {},
+                    middleware: routeData.middleware
+                }
+            }
+            return null;
+        }
+
         const segments = path.split("/").filter(s => s.length > 0);
         let currentNode = this.root;
         const params = {};

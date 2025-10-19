@@ -14,8 +14,21 @@ const pool = new Pool({
 });
 
 async function createUserTable() {
-    await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`)
-    await pool.query(`CREATE EXTENSION IF NOT EXISTS citext`);
+    try {
+        await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
+    } catch (error) {
+        if (error.code !== '23505') { // Ignore "already exists" errors
+            console.error('Error creating pgcrypto extension:', error);
+        }
+    }
+    
+    try {
+        await pool.query(`CREATE EXTENSION IF NOT EXISTS citext`);
+    } catch (error) {
+        if (error.code !== '23505') { // Ignore "already exists" errors
+            console.error('Error creating citext extension:', error);
+        }
+    }
     await pool.query(`CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name TEXT NOT NULL,

@@ -24,8 +24,9 @@ const static = (rootDir) => {
         if (requestPath === "/" || requestPath === "/profile" || requestPath === "/login" || requestPath === "/new-post") 
             requestPath = "/index.html";
 
-        // fullpath: ../public/index.html
-        const fullPath = path.join("../", path.join(rootDir , requestPath));
+        // Resolve static root relative to current working directory if not absolute
+        const staticRoot = path.isAbsolute(rootDir) ? rootDir : path.resolve(process.cwd(), rootDir);
+        const fullPath = path.join(staticRoot , requestPath);
         const ext = path.extname(fullPath).toLowerCase();
         const contentType = mimeTypes[ext] || "application/octet-stream";
         

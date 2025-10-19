@@ -88,8 +88,17 @@ npm install
 ```
 3. Set up environment variables
 4. Start the application:
+
+For single process:
 ```bash
 npm start
+# or
+npm run dev
+```
+
+For cluster mode:
+```bash
+npm run cluster
 ```
 
 ## Configuration

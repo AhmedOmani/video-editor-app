@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: video_editor_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345ahmedsaber
+    ports:
+      - "5433:5432"  
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - video-editor-network
+
+  video-editor-app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=postgres  
+      - DB_PORT=5432   
+      - DB_USER=postgres
+      - DB_PASSWORD=12345ahmedsaber
+      - DB_DATABASE=video_editor_app
+      - JWT_SECRET=your-super-secret-jwt-key-here-make-it-long-and-random
+      - JWT_EXPIRES_IN=24h
+      - PORT=3000
+      - NODE_ENV=development  
+      - DB_SSL=false
+      - BASE_PATH=/app/storage
+      - FFMPEG_PATH=ffmpeg
+      - FFPROBE_PATH=ffprobe
+      - STATIC_ROOT=/app/public
+    volumes:
+      - ./storage:/app/storage
+      - /tmp:/tmp
+    depends_on:
+      - postgres
+    networks:
+      - video-editor-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  video-editor-network:
+    driver: bridge

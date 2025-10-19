@@ -44,11 +44,11 @@ class StorageManager {
 
     async deleteFile(filePath) {
         try {
-            if (this.fileExists(filePath)) {
-                await fs.unlink(filePath);
-            }
+            await fs.unlink(filePath);
         } catch(error) {
-            console.log("Error while deleting file: " , error);
+            if (error.code !== 'ENOENT') {
+                console.log("Error while deleting file: " , error);
+            }
         }
     }
 

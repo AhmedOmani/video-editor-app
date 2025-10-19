@@ -12,7 +12,8 @@ const PORT = config.server.port;
 const omix = new Omix();
 
 omix.use(globalLoggerMiddleware);
-omix.use(static("./public"));
+const staticRoot = process.env.STATIC_ROOT || "./public";
+omix.use(static(staticRoot));
 
 omix.get("/api/user", authMiddleware, (req, res) => {
     res.json({
@@ -31,6 +32,7 @@ omix.patch("/api/video/extract-audio" , authMiddleware , Video.extractAudio);
 omix.get("/get-video-asset" , authMiddleware , Video.getVideoAssets);
 omix.put("/api/video/resize" , authMiddleware , Video.resizeVideo);
 omix.put("/api/video/change-format" , authMiddleware , Video.changeFormat);
+
 
 omix.listen(PORT , async () => {
     await generate();
