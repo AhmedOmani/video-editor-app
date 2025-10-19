@@ -49,9 +49,30 @@ async function createVideoTable() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_videos_video_id ON videos(video_id)`);
 }
 
+async function createJobsTable() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS jobs(
+            id SERIAL PRIMARY KEY,
+            job_id VARCHAR(50) UNIQUE NOT NULL,
+            type VARCHAR(20) NOT NULL, -- 'resize' or 'format'
+            video_id VARCHAR(8) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'processing', 'completed', 'failed'
+            job_data JSONB NOT NULL,
+            worker_id VARCHAR(50), -- Which worker is processing this job
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ
+        )`
+    );
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_video_id ON jobs(video_id)`);
+}
+
 async function generate() {
     await createUserTable();
     await createVideoTable();
+    await createJobsTable();
 }
 
 process.on("SIGINT", async () => {

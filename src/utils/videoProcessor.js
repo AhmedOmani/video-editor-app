@@ -124,6 +124,7 @@ class VideoProcessor {
     
     async extractAudio(videoPath , audioPath) {
         return new Promise((resolve , reject) => {
+            console.log("Processing extract audio job");
             const ffmpeg = spawn(this.ffmpegCommand, [
                 '-i', videoPath,        
                 '-vn',                  
@@ -159,6 +160,7 @@ class VideoProcessor {
 
     async videoResize(videoPath , outputPath, width , height) {
         return new Promise((resolve , reject) => {
+            console.log("Processing resize job");
             const ffmpeg = spawn(this.ffmpegCommand , [
                 '-i' , videoPath ,
                 '-vf' , `scale=${width}:${height}`,
@@ -224,6 +226,8 @@ class VideoProcessor {
 
             ffmpegArgs.push(outputPath, '-y');
             ffmpegArgs.push('-threads' , '2');
+
+            console.log("Processing change format job")
 
             const ffmpeg = spawn(this.ffmpegCommand, ffmpegArgs);
         

@@ -6,6 +6,7 @@ const storage = require("../utils/storage.js");
 const videoRepo = require("../repositories/video.repository.js");
 const videoProcessor = require("../utils/videoProcessor.js");
 const jobQueue = require("../utils/jobQueue.js");
+const errorHandler = require("../utils/errorHandler.js");
 
 const getVideos = async (req , res) => {
     const userId = req.userId;
@@ -222,55 +223,50 @@ const getVideoAssets = async (req , res) => {
     
 };
 
-const extractAudio = async (req , res) => {
+const extractAudio = async (req, res) => {
     const params = req.queryParams();
     const videoId = params.get("videoId");
-    let audioPath;
+
     try {
-        const video = await videoRepo.getVideoById(videoId);
+        // Create job ID
+        const jobId = `extract-audio_${videoId}_${Date.now()}`;
 
-        if (!video) {
-            return res.status(404).json({
-                message: "Video not found"
-            });
-        } 
-        if (video.extracted_audio === true) {
-            return res.status(400).json({
-                message: "Audio has already been extracted"
-            });
-        }
-        
-        const videoPath = storage.getFilePath(videoId , `original.${video.extension}`);
-        audioPath = storage.getFilePath(videoId , "audio.aac");
+        // Register error callback before adding job
+        errorHandler.registerErrorCallback(jobId, async (error, jobData) => {
+            if (res && !res.headersSent()) {
+                res.status(500).json({
+                    error: "Extract Audio job failed",
+                    message: error.message,
+                    jobId: jobId
+                });
+            }
+        });
 
-        //check if video has audio stream or not.
-        const hasAudio = await videoProcessor.hasAudioStream(videoPath);
-        if (!hasAudio) {
-            return res.status(400).json({
-                message: "Video does not contain an audio track to extract"
-            });
-        }
-        
-        await videoProcessor.extractAudio(videoPath, audioPath);
-        await videoRepo.updateAudioState(videoId);
+        // Add job to queue with job ID
+        await jobQueue.enqueue(jobId, {
+            type: "extract-audio",
+            videoId: videoId
+        });
 
+        // Send immediate response
         res.status(200).json({
             status: "success",
-            message: "Audio extracted successfully",
-            audioPath: audioPath
+            message: "Audio extraction job queued successfully",
+            jobId: jobId
         });
 
-    } catch(error) {
-        console.error("Audio extraction error:", error);
-        storage.deleteFile(audioPath);
-        res.status(500).json({
-            message: "Failed to extract audio",
-            error: error.message
-        });
+    } catch (error) {
+        console.error("Error while scheduling extract audio process:", error);
+        if (res && !res.headersSent()) {
+            res.status(500).json({
+                error: "Failed to start audio extraction process",
+                message: error.message
+            });
+        }
     }
 };
 
-const resizeVideo = async (req , res) => {
+const resizeVideo = async (req, res) => {
     const data = await req.body();
     const videoId = data.videoId;
     const width = Number(data.width);
@@ -283,38 +279,62 @@ const resizeVideo = async (req , res) => {
                 message: "Video not found!"
             });
         }
+        
         if (width <= 0 || height <= 0) {
             return res.status(400).json({
                 message: "Width and height should be greater than 0"
             });
         }
+        
         if (width >= video.dimensions.width || height >= video.dimensions.height) {
             return res.status(400).json({
                 message: "Resize dimensions should be smaller than original dimensions"
             });
         }
+
         await videoRepo.updateResizeProcessingStatus(videoId, { width, height }, true);
         
-        jobQueue.enqueue({
+        // Create job ID
+        const jobId = `resize_${videoId}_${Date.now()}`;
+
+        // Register error callback before adding job
+        errorHandler.registerErrorCallback(jobId, async (error, jobData) => {
+            if (res && !res.headersSent()) {
+                res.status(500).json({
+                    error: "Resize job failed",
+                    message: error.message,
+                    jobId: jobId
+                });
+            }
+        });
+
+        // Add job to queue with job ID
+        await jobQueue.enqueue(jobId, {
             type: "resize",
             videoId: videoId,
             width: width,
-            height: height,
-            res: res
+            height: height
         });
-    
+
+        // Send immediate response
         res.status(200).json({
             status: "success",
-            message: "Resize process has successfully started! This process could take uo to a few hour. Please check back later"
+            message: "Resize job queued successfully! This process could take up to a few hours. Please check back later",
+            jobId: jobId
         });
 
-    } catch(error) {
-        console.log("Error while scheduling resize process: " , error);
+    } catch (error) {
+        console.error("Error while scheduling resize process:", error);
+        if (res && !res.headersSent()) {
+            res.status(500).json({
+                error: "Failed to start resize process",
+                message: error.message
+            });
+        }
     }
-    
 };
 
-const changeFormat = async (req , res) => {
+const changeFormat = async (req, res) => {
     const data = await req.body();
     const videoId = data.videoId;
     const format = data.format.toLowerCase();
@@ -331,33 +351,48 @@ const changeFormat = async (req , res) => {
             return res.status(400).json({
                 message: "The selected format is the same as the original video format"
             });
-        } 
+        }
 
         await videoRepo.updateFormatProcessingStatus(videoId, format, true);
 
-        jobQueue.enqueue({
+        // Create job ID
+        const jobId = `change-format_${videoId}_${Date.now()}`;
+
+        // Register error callback before adding job
+        errorHandler.registerErrorCallback(jobId, async (error, jobData) => {
+            if (res && !res.headersSent()) {
+                res.status(500).json({
+                    error: "Format conversion job failed",
+                    message: error.message,
+                    jobId: jobId
+                });
+            }
+        });
+
+        // Add job to queue with job ID
+        await jobQueue.enqueue(jobId, {
             type: "change-format",
             videoId: videoId,
-            format: format,
-            res: res
+            format: format
         });
 
+        // Send immediate response
         res.status(200).json({
             status: "success",
-            message: "Format conversion process has successfully started! This process could take up to a few hours. Please check back later"
-
-        })
-    } catch (error) {
-        console.log("Error while scheduling format conversion process:", error);
-        res.status(500).json({
-            message: "Failed to start format conversion process",
-            error: error.message
+            message: "Format conversion job queued successfully! This process could take up to a few hours. Please check back later",
+            jobId: jobId
         });
+
+    } catch (error) {
+        console.error("Error while scheduling format conversion process:", error);
+        if (res && !res.headersSent()) {
+            res.status(500).json({
+                error: "Failed to start format conversion process",
+                message: error.message
+            });
+        }
     }
 };
-
-
-
 
 module.exports = {
     uploadVideo,

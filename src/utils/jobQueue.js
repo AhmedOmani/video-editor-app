@@ -1,102 +1,113 @@
 const storage = require("../utils/storage.js");
 const videoRepo = require("../repositories/video.repository.js");
+const jobRepo = require("../repositories/job.repository.js");
 const videoProcessor = require("../utils/videoProcessor.js");
+const errorHandler = require("../utils/errorHandler.js");
 
-// Queued based processing - design pattern (Youtube use it!)
-class JobeQueue {
-    constructor () {
-        this.jobs = [];
-        this.currentJob = null;
+// Centralized job processing - database-based queue system
+class JobQueue {
+    constructor() {
+        this.workerId = `${process.pid}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         this.isProcessing = false;
-        this.recoverProcessingJobs();
-    }
+        this.pollInterval = 5000;
 
-    async recoverProcessingJobs() {
-        const processingJobs = await videoRepo.getProcessingJobs();
-        if (processingJobs === 0) return ;
-
-        for (const jobData of processingJobs) { 
-            const { videoId , jobType , jobKey, dimensions } = jobData;
-            
-            if (jobType === "resize") {
-                const [width , height] = jobKey.split("x").map(Number);
-                const job = {
-                    type: "resize",
-                    videoId: videoId,
-                    width: width,
-                    height: height,
-                    res: null
-                };
-                this.jobs.push(job);
-                console.log(`Re-queuing resize job: ${videoId} -> ${width}x${height}`);
+        //get message from primary process
+        process.on("message" , (msg) => {
+            if (msg.type === 'designate_job_processor') {
+                this.isJobProcessor = true;
+                console.log(`Worker ${this.workerId} designated as job processor`);
+                this.startProcessing();
             }
+        });
+    }
 
-            else if (jobType === "format") {
-                const job = {
-                    type: "change-format",
-                    videoId: videoId,
-                    format: jobKey,
-                    res:null
-                };
-                this.jobs.push(job);
-                console.log(`Re-queuing format job: ${videoId} -> ${jobKey}`);
+    async startProcessing() {
+        console.log(`Worker ${this.workerId} started`);
+        await this.recoverJobs();
+
+        setInterval(() => {
+            if (!this.isProcessing) { 
+                this.excuteNext();
             }
-        }
-
-        if (this.jobs.length > 0) {
-            console.log("Starting job processing...");
-            this.excuteNext();
-        }
+        }, this.pollInterval);
     }
 
-    enqueue(job) {
-        console.log(`Pushing new job of type: ${job.type}...`);
-        this.jobs.push(job);
-        this.excuteNext();
-    }
-
-    // we can playaround it and pick more that just one process...
-    dequeue() {
-        return this.jobs.shift();
-    }
-    async excuteNext() {
-        if (this.isProcessing) return ;
-        
-        const job = this.dequeue();
-        if (!job) return ;
-
-        this.isProcessing = true;
-        this.currentJob = job;
-
+    async recoverJobs() {
         try {
-            await this.excute(job);
-        } catch(error) {
-            console.error("Job excution failed: " , error);
-            await this.handleJobFailure(job, error);
-        } finally {
-            this.currentJob = null ;
-            this.isProcessing = false;
-            setImmediate(() => this.excuteNext());
+            const result = await jobRepo.getNotCompletedJobs(this.workerId);
+            if (result.rows.length > 0) {
+                console.log(`Recovered ${result.rows.length} jobs for worker ${this.workerId}`);
+            }
+        } catch (error) {
+            console.error("Failed to recover jobs:", error);
         }
-        
     }
 
-    async excute(job) {
+    async enqueue(jobId, job) {
+        const {type, videoId} = job;
         try {
-            if (job.type === "resize") await this.resize(job);
-            else if (job.type === "change-format") await this.changeFormat(job);
-            //After finish each job we will iterate again ...
-            console.log(`Job ${job.type} completed sucessfully`);
-        } catch(error) {
-            console.error(`Job ${job.type} failed: ` , error);
+            await jobRepo.addJob(jobId, type, videoId, job);
+            console.log("Pushing new job of type:", type);
+        } catch (error) {
+            console.error("Failed to add job:", error);
             throw error;
         }
     }
 
-    async resize(job) {
-        const {videoId , width , height , res} = job;
+    async excuteNext() {
         try {
-            console.log("Processing resize job for VideoId:", videoId);
+            const rows = await jobRepo.getNextPendingJob(this.workerId);
+            if (rows.length === 0) {
+                return;
+            }
+
+            const job = rows[0];
+            this.isProcessing = true;
+            
+            console.log(`Worker ${this.workerId} processing job: ${job.job_id}`);
+
+            const jobData = typeof job.job_data === 'string' ? JSON.parse(job.job_data) : job.job_data;
+
+            try {
+                await this.excute(jobData);
+                await jobRepo.updateCompletedJob(job.id);
+                await errorHandler.handleJobSuccess(job.job_id, jobData);
+            } catch(error) {
+                console.error(`Job ${job.job_id} failed:`, error);
+                await jobRepo.updateFailedJob(job.id, error.message);
+                await errorHandler.handleJobError(job.job_id, error, jobData);
+            }
+        
+        } catch(error) {
+            console.error("Failed to process job:", error);
+        } finally {
+            this.isProcessing = false;
+        }
+    }
+
+    async excute(job) {
+        try {
+            if (job.type === "resize") {
+                await this.resize(job);
+            } else if (job.type === "change-format") {
+                await this.changeFormat(job);
+            } else if (job.type === "extract-audio") {
+                await this.extractAudio(job);
+            } else {
+                throw new Error(`Unknown job type: ${job.type}`);
+            }
+
+            console.log(`Job ${job.type} completed successfully`);
+        } catch(error) {
+            console.error(`Job ${job.type} failed:`, error);
+            throw error; 
+        }
+    }
+
+    async resize(job) {
+        const {videoId, width, height} = job;
+        try {
+            
             
             const video = await videoRepo.getVideoById(videoId);
             if (!video) {
@@ -109,8 +120,7 @@ class JobeQueue {
             await videoProcessor.videoResize(videoPath, resizedVideoPath, width, height);
             await videoRepo.updateResizeProcessingStatus(videoId, { width, height }, false);
             
-            console.log("Resize completed successfully for:", videoId);
-            console.log(`Number of jobs remaining: ${this.jobs.length}`);
+            console.log("Resize job completed successfully for:", videoId);
             
         } catch(error) {
             console.error("Resize process error:", error);
@@ -135,15 +145,13 @@ class JobeQueue {
     }
 
     async changeFormat(job) {
-        const {videoId , format , res } = job;
+
+        const {videoId, format} = job; 
         try {
             console.log("Processing format change job for VideoId:", videoId);
             const video = await videoRepo.getVideoById(videoId);
             if (!video) {
-                console.error(`Video ${videoId} not found`);
-                return res.status(404).json({
-                    message: "Video not found!"
-                });
+                throw new Error(`Video ${videoId} not found`);
             }
 
             const videoPath = storage.getFilePath(videoId, `original.${video.extension}`);
@@ -152,8 +160,7 @@ class JobeQueue {
             await videoProcessor.changeFormat(videoPath, formatVideoPath, format);
             await videoRepo.updateFormatProcessingStatus(videoId, format, false);
             
-            console.log("Format conversion completed successfully for:", videoId);
-            console.log(`Number of jobs remaining: ${this.jobs.length}`);
+            console.log("Format conversion job completed successfully for:", videoId);
 
         } catch(error) {
             console.error("Format conversion error:", error);
@@ -171,36 +178,54 @@ class JobeQueue {
                 console.error("Failed to update database status:", dbError);
             }
             
-            throw error;
+            throw error; 
         }
     }
 
-    async handleJobFailure(job, error) {
-        console.error(`Job ${job.type} failed permanently:`, error);
-        
-        if (job.type === "resize") {
-            try {
-                await videoRepo.updateResizeProcessingStatus(job.videoId, { 
-                    width: job.width, 
-                    height: job.height 
-                }, false);
-            } catch (dbError) {
-                console.error("Failed to update database after job failure:", dbError);
+    async extractAudio(job) {
+        const {videoId} = job;
+        let audioPath;
+
+        try {
+            const video = await videoRepo.getVideoById(videoId);
+            if (!video) {
+                throw new Error(`Video ${videoId} not found`); 
+            } 
+            
+            if (video.extracted_audio === true) {
+                console.log("Audio already extracted for video:", videoId);
+                return; // Skip processing 
             }
-        }
-    }
 
-    getStatus() {
-        return {
-            isProcessing: this.isProcessing,
-            currentJob: this.currentJob,
-            queueLength: this.jobs.length,
-            jobs: this.jobs.map(job => ({
-                type: job.type,
-                videoId: job.videoId,
-            }))
-        };
+            const videoPath = storage.getFilePath(videoId, `original.${video.extension}`);
+            audioPath = storage.getFilePath(videoId, "audio.aac");
+
+            // Check if video has audio stream or not
+            const hasAudio = await videoProcessor.hasAudioStream(videoPath);
+            if (!hasAudio) {
+                throw new Error("Video does not contain an audio track to extract"); 
+            }
+
+            await videoProcessor.extractAudio(videoPath, audioPath);
+            await videoRepo.updateAudioState(videoId);
+
+            console.log("Audio extraction job completed successfully");
+
+        } catch(error) {
+            console.error("Audio extraction error:", error);
+            
+            // Clean up failed file
+            try {
+                if (audioPath) {
+                    await storage.deleteFile(audioPath); 
+                }
+            } catch (cleanupError) {
+                console.error("Failed to clean up audio file:", cleanupError);
+            }
+            
+            throw error; 
+        }
     }
 }
 
-module.exports = new JobeQueue();
+module.exports = new JobQueue();
