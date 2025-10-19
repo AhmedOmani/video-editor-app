@@ -69,10 +69,38 @@ async function createJobsTable() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_video_id ON jobs(video_id)`);
 }
 
+async function seedDefaultUser() {
+    try {
+        // Check if admin user already exists
+        const existingUser = await pool.query(
+            'SELECT id FROM users WHERE username = $1',
+            ['admin']
+        );
+
+        if (existingUser.rows.length === 0) {
+            // Hash the password (you'll need to hash '123' first)
+            const bcrypt = require('bcrypt');
+            const hashedPassword = await bcrypt.hash('123', 10);
+            
+            await pool.query(`
+                INSERT INTO users (name, username, password)
+                VALUES ($1, $2, $3)
+            `, ['Admin User', 'admin', hashedPassword]);
+            
+            console.log('Default admin user created successfully');
+        } else {
+            console.log('Admin user already exists');
+        }
+    } catch (error) {
+        console.error('Error creating default user:', error);
+    }
+}
+
 async function generate() {
     await createUserTable();
     await createVideoTable();
     await createJobsTable();
+    await seedDefaultUser();
 }
 
 process.on("SIGINT", async () => {
