@@ -75,10 +75,6 @@ const updateAudioState = async (videoId) => {
 
 const updateResizeProcessingStatus = async (videoId , dimensions , processing) => {
     const resizeKey = `${dimensions.width}x${dimensions.height}`;
-    
-    console.log("DEBUG - resizeKey:", resizeKey);
-    console.log("DEBUG - processing:", processing);
-    console.log("DEBUG - videoId:", videoId);
 
     // Use direct JSONB merge
     const result = await pool.query(`
@@ -87,16 +83,11 @@ const updateResizeProcessingStatus = async (videoId , dimensions , processing) =
         WHERE video_id = $2
         RETURNING resizes
     `, [JSON.stringify({[resizeKey]: {processing}}), videoId]);
-
-    console.log("DEBUG - Updated resizes:", result.rows[0]?.resizes);
     
     return result.rows[0];
 };
 
 const updateFormatProcessingStatus = async (videoId, format, processing) => {
-    console.log("DEBUG - format:", format);
-    console.log("DEBUG - processing:", processing);
-    console.log("DEBUG - videoId:", videoId);
 
     const result = await pool.query(`
         UPDATE videos 
@@ -104,10 +95,45 @@ const updateFormatProcessingStatus = async (videoId, format, processing) => {
         WHERE video_id = $2
         RETURNING formats
     `, [JSON.stringify({[format]: {processing}}), videoId]);
-
-    console.log("DEBUG - Updated formats:", result.rows[0]?.formats);
     
     return result.rows[0];
+};
+
+// Get all videos with processing jobs that need to be re-scheduled
+const getProcessingJobs = async () => {
+    const result = await pool.query(`
+        -- Get resize jobs that are processing
+        SELECT 
+            video_id as "videoId" ,
+            name,
+            extension,
+            dimensions,
+            'resize' as "jobType",
+            resize_item.key as "jobKey"
+        FROM videos,
+             jsonb_each(resizes) AS resize_item
+        WHERE resizes IS NOT NULL 
+          AND resizes != '{}'::jsonb
+          AND (resize_item.value->>'processing')::boolean = true
+
+        UNION ALL
+
+        -- Get format jobs that are processing  
+        SELECT 
+            video_id as "videoId" ,
+            name,
+            extension,
+            dimensions,
+            'format' as "jobType",
+            format_item.key as "jobKey"
+        FROM videos,
+             jsonb_each(formats) AS format_item
+        WHERE formats IS NOT NULL 
+          AND formats != '{}'::jsonb
+          AND (format_item.value->>'processing')::boolean = true
+    `);
+    
+    return result.rows;
 };
 
 module.exports = {
@@ -116,5 +142,6 @@ module.exports = {
     getUserVideos,
     updateAudioState,
     updateResizeProcessingStatus,
-    updateFormatProcessingStatus
+    updateFormatProcessingStatus,
+    getProcessingJobs
 };

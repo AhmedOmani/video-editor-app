@@ -74,6 +74,7 @@ class VideoProcessor {
                 '-q:v', '2',
                 '-vf', 'scale=320:240',
                 thumbnailPath,
+                '-threads' , '2',
                 '-y'
             ]);
 
@@ -131,7 +132,8 @@ class VideoProcessor {
                 '-ac', '2',             
                 '-ar', '44100',         
                 '-f', 'adts',           
-                audioPath,              
+                audioPath,  
+                '-threads' , '2',            
                 '-y'                    
             ]);
 
@@ -156,8 +158,6 @@ class VideoProcessor {
     }
 
     async videoResize(videoPath , outputPath, width , height) {
-        console.log(videoPath);
-        console.log(outputPath);
         return new Promise((resolve , reject) => {
             const ffmpeg = spawn(this.ffmpegCommand , [
                 '-i' , videoPath ,
@@ -167,6 +167,7 @@ class VideoProcessor {
                 '-preset' , 'medium',
                 '-crf' , '23',
                 outputPath,
+                '-threads' , '2',
                 '-y'
             ]);
 
@@ -191,16 +192,41 @@ class VideoProcessor {
     }
 
     async changeFormat(videoPath, outputPath, targetFormat) {
-        console.log("Converting format:", videoPath, "to", outputPath);
-        
         return new Promise((resolve, reject) => {
-            const ffmpeg = spawn(this.ffmpegCommand, [
-                '-i', videoPath,
-                '-c', 'copy', 
-                outputPath,
-                '-y'
-            ]);
-    
+            let ffmpegArgs = ['-i', videoPath];
+        
+            // Add format-specific encoding options
+            if (targetFormat.toLowerCase() === 'webm') {
+                ffmpegArgs.push(
+                    '-c:v', 'libvpx-vp9',  
+                    '-c:a', 'libopus',     
+                    '-b:v', '1M',          
+                    '-b:a', '128k',        
+                    '-crf', '30'           
+                );
+            } else if (targetFormat.toLowerCase() === 'mp4') {
+                ffmpegArgs.push(
+                    '-c:v', 'libx264',   
+                    '-c:a', 'aac',         
+                    '-preset', 'medium',
+                    '-crf', '23'
+                );
+            } else if (targetFormat.toLowerCase() === 'mov') {
+                ffmpegArgs.push(
+                    '-c:v', 'libx264',     
+                    '-c:a', 'aac',         
+                    '-preset', 'medium',
+                    '-crf', '23'
+                );
+            } else {
+                ffmpegArgs.push('-c', 'copy');
+            }
+
+            ffmpegArgs.push(outputPath, '-y');
+            ffmpegArgs.push('-threads' , '2');
+
+            const ffmpeg = spawn(this.ffmpegCommand, ffmpegArgs);
+        
             let errorOutput = '';
     
             ffmpeg.stderr.on('data', (data) => {

@@ -8,6 +8,45 @@ class JobeQueue {
         this.jobs = [];
         this.currentJob = null;
         this.isProcessing = false;
+        this.recoverProcessingJobs();
+    }
+
+    async recoverProcessingJobs() {
+        const processingJobs = await videoRepo.getProcessingJobs();
+        if (processingJobs === 0) return ;
+
+        for (const jobData of processingJobs) { 
+            const { videoId , jobType , jobKey, dimensions } = jobData;
+            
+            if (jobType === "resize") {
+                const [width , height] = jobKey.split("x").map(Number);
+                const job = {
+                    type: "resize",
+                    videoId: videoId,
+                    width: width,
+                    height: height,
+                    res: null
+                };
+                this.jobs.push(job);
+                console.log(`Re-queuing resize job: ${videoId} -> ${width}x${height}`);
+            }
+
+            else if (jobType === "format") {
+                const job = {
+                    type: "change-format",
+                    videoId: videoId,
+                    format: jobKey,
+                    res:null
+                };
+                this.jobs.push(job);
+                console.log(`Re-queuing format job: ${videoId} -> ${jobKey}`);
+            }
+        }
+
+        if (this.jobs.length > 0) {
+            console.log("Starting job processing...");
+            this.excuteNext();
+        }
     }
 
     enqueue(job) {
@@ -33,7 +72,7 @@ class JobeQueue {
             await this.excute(job);
         } catch(error) {
             console.error("Job excution failed: " , error);
-            await this.handleJobFailur(job, error);
+            await this.handleJobFailure(job, error);
         } finally {
             this.currentJob = null ;
             this.isProcessing = false;
