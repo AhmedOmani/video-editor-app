@@ -48,14 +48,15 @@ const getUserVideos = async (userId) => {
     const result = await pool.query(`
         SELECT 
             id,
-            video_id as "videoId",  -- Alias video_id to videoId
+            video_id as "videoId",
             name,
             extension,
             dimensions,
-            user_id as "userId",    -- Also alias user_id to userId
+            user_id as "userId",
             original_filename as "originalFilename",
             extracted_audio as "extractedAudio",
             resizes,
+            formats,  -- Add this line!
             file_size as "fileSize",
             created_at as "createdAt",
             updated_at as "updatedAt"
@@ -114,5 +115,6 @@ module.exports = {
     getVideoById,
     getUserVideos,
     updateAudioState,
-    updateResizeProcessingStatus
+    updateResizeProcessingStatus,
+    updateFormatProcessingStatus
 };

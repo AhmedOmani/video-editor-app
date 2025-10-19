@@ -118,13 +118,35 @@ const getVideoAssets = async (req , res) => {
             case 'resize':
                 filePath = storage.getFilePath(videoId, `${dimentions}.${video.extension}`);
                 break;
+            case 'change-format':
+                const format = dimentions; // Reusing the dimensions parameter for format
+                filePath = storage.getFilePath(videoId, `format_${format}.${format}`);
+                break;
             default:
                 return res.status(400).json({ error: 'Invalid asset type' });
         }
 
-        //check if the file exists
-        if (!await storage.fileExists(videoId, `${type === 'thumbnail' ? 'thumbnail.jpg' : type === 'audio' ? 'audio.aac' : dimentions !== null ? `${dimentions}.${video.extension}` : `original.${video.extension}`}`)) {
-            return res.status(404).json({ error: `Asset ${type} not found` });
+
+        //Helper functions to check if file exists in storage or not.
+        const getFileNameForType = (type, video, dimentions) => {
+            switch (type) {
+                case 'thumbnail':
+                    return 'thumbnail.jpg';
+                case 'audio':
+                    return 'audio.aac';
+                case 'resize':
+                    return `${dimentions}.${video.extension}`;
+                case 'change-format':
+                    return `format_${dimentions}.${dimentions}`;
+                case 'original':
+                    return `original.${video.extension}`;
+            }
+        };
+        const fileName = getFileNameForType(type , video , dimentions);
+        if (!fileName || !await storage.fileExists(videoId , fileName)) {
+            return res.status(404).json({
+                error: `Asset ${type} not found`
+            });
         }
         
         let fileHandler ;
@@ -147,7 +169,10 @@ const getVideoAssets = async (req , res) => {
                 fileHandler = await fs.open(filePath , "r");
                 mimeType = "video/mp4";
                 break;
-            // audio , resize , original
+            case "change-format":
+                fileHandler = await fs.open(filePath , "r");
+                mimeType = `video/mp4`;
+                break;
         }
 
         const readFileStream = fileHandler.createReadStream();
@@ -195,7 +220,7 @@ const getVideoAssets = async (req , res) => {
         }
     }
     
-}
+};
 
 const extractAudio = async (req , res) => {
     const params = req.queryParams();
@@ -243,7 +268,7 @@ const extractAudio = async (req , res) => {
             error: error.message
         });
     }
-}
+};
 
 const resizeVideo = async (req , res) => {
     const data = await req.body();
@@ -287,12 +312,58 @@ const resizeVideo = async (req , res) => {
         console.log("Error while scheduling resize process: " , error);
     }
     
-}
+};
+
+const changeFormat = async (req , res) => {
+    const data = await req.body();
+    const videoId = data.videoId;
+    const format = data.format.toLowerCase();
+
+    try {
+        const video = await videoRepo.getVideoById(videoId);
+        if (!video) {
+            return res.status(404).json({
+                message: "Video not found!"
+            });
+        }
+
+        if (format === video.extension.toLowerCase()) {
+            return res.status(400).json({
+                message: "The selected format is the same as the original video format"
+            });
+        } 
+
+        await videoRepo.updateFormatProcessingStatus(videoId, format, true);
+
+        jobQueue.enqueue({
+            type: "change-format",
+            videoId: videoId,
+            format: format,
+            res: res
+        });
+
+        res.status(200).json({
+            status: "success",
+            message: "Format conversion process has successfully started! This process could take up to a few hours. Please check back later"
+
+        })
+    } catch (error) {
+        console.log("Error while scheduling format conversion process:", error);
+        res.status(500).json({
+            message: "Failed to start format conversion process",
+            error: error.message
+        });
+    }
+};
+
+
+
 
 module.exports = {
     uploadVideo,
     getVideos,
     getVideoAssets,
     extractAudio,
-    resizeVideo
+    resizeVideo,
+    changeFormat
 };

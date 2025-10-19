@@ -42,10 +42,10 @@ class StorageManager {
         }
     }
 
-    async deleteFile(audioPath) {
+    async deleteFile(filePath) {
         try {
-            if (this.fileExists(audioPath)) {
-                await fs.unlink(audioPath);
+            if (this.fileExists(filePath)) {
+                await fs.unlink(filePath);
             }
         } catch(error) {
             console.log("Error while deleting file: " , error);

@@ -30,6 +30,7 @@ omix.post("/api/upload-video" , authMiddleware , Video.uploadVideo);
 omix.patch("/api/video/extract-audio" , authMiddleware , Video.extractAudio);
 omix.get("/get-video-asset" , authMiddleware , Video.getVideoAssets);
 omix.put("/api/video/resize" , authMiddleware , Video.resizeVideo);
+omix.put("/api/video/change-format" , authMiddleware , Video.changeFormat);
 
 omix.listen(PORT , async () => {
     await generate();

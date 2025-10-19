@@ -189,6 +189,37 @@ class VideoProcessor {
             });
         });
     }
+
+    async changeFormat(videoPath, outputPath, targetFormat) {
+        console.log("Converting format:", videoPath, "to", outputPath);
+        
+        return new Promise((resolve, reject) => {
+            const ffmpeg = spawn(this.ffmpegCommand, [
+                '-i', videoPath,
+                '-c', 'copy', 
+                outputPath,
+                '-y'
+            ]);
+    
+            let errorOutput = '';
+    
+            ffmpeg.stderr.on('data', (data) => {
+                errorOutput += data.toString();
+            });
+    
+            ffmpeg.on('close', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`Format conversion failed: ${errorOutput}`));
+                    return;
+                }
+                resolve(outputPath);
+            });
+    
+            ffmpeg.on('error', (err) => {
+                reject(new Error(`FFmpeg process error: ${err.message}`));
+            });
+        });
+    }
 }
 
 module.exports = new VideoProcessor();

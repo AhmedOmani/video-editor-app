@@ -45,6 +45,7 @@ class JobeQueue {
     async excute(job) {
         try {
             if (job.type === "resize") await this.resize(job);
+            else if (job.type === "change-format") await this.changeFormat(job);
             //After finish each job we will iterate again ...
             console.log(`Job ${job.type} completed sucessfully`);
         } catch(error) {
@@ -91,6 +92,47 @@ class JobeQueue {
             }
             
             throw error; 
+        }
+    }
+
+    async changeFormat(job) {
+        const {videoId , format , res } = job;
+        try {
+            console.log("Processing format change job for VideoId:", videoId);
+            const video = await videoRepo.getVideoById(videoId);
+            if (!video) {
+                console.error(`Video ${videoId} not found`);
+                return res.status(404).json({
+                    message: "Video not found!"
+                });
+            }
+
+            const videoPath = storage.getFilePath(videoId, `original.${video.extension}`);
+            const formatVideoPath = storage.getFilePath(videoId, `format_${format}.${format}`);
+
+            await videoProcessor.changeFormat(videoPath, formatVideoPath, format);
+            await videoRepo.updateFormatProcessingStatus(videoId, format, false);
+            
+            console.log("Format conversion completed successfully for:", videoId);
+            console.log(`Number of jobs remaining: ${this.jobs.length}`);
+
+        } catch(error) {
+            console.error("Format conversion error:", error);
+        
+            try {
+                const failedFilePath = storage.getFilePath(videoId, `format_${format}.${format}`);
+                await storage.deleteFile(failedFilePath);
+            } catch (cleanupError) {
+                console.error("Failed to clean up file:", cleanupError);
+            }    
+            
+            try {
+                await videoRepo.updateFormatProcessingStatus(videoId, format, false);
+            } catch (dbError) {
+                console.error("Failed to update database status:", dbError);
+            }
+            
+            throw error;
         }
     }
 
