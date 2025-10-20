@@ -7,21 +7,42 @@ const errorHandler = require("../utils/errorHandler.js");
 // Centralized job processing - database-based queue system
 class JobQueue {
     constructor() {
+        // remove noisy debug logs in production
         this.workerId = `${process.pid}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         this.isProcessing = false;
-        this.pollInterval = 5000;
+        this.pollInterval = 2000;
+        this.isJobProcessor = false;
+        this.isDbReady = process.env.DB_READY === '1';
 
         //get message from primary process
         process.on("message" , (msg) => {
-            if (msg.type === 'designate_job_processor') {
+            if (msg && msg.type === 'designate_job_processor') {
                 this.isJobProcessor = true;
                 console.log(`Worker ${this.workerId} designated as job processor`);
-                this.startProcessing();
+                this.maybeStart();
             }
         });
+
+        // Fallback: allow leader election via env to avoid message race conditions
+        if (process.env.JOB_LEADER === '1') {
+            this.isJobProcessor = true;
+            this.maybeStart();
+        }
+    }
+
+    setDbReady() {
+        this.isDbReady = true;
+        this.maybeStart();
+    }
+
+    maybeStart() {
+        if (this.isJobProcessor && this.isDbReady) {
+            this.startProcessing();
+        }
     }
 
     async startProcessing() {
+        if (!this.isJobProcessor || !this.isDbReady) return;
         console.log(`Worker ${this.workerId} started`);
         await this.recoverJobs();
 
@@ -58,6 +79,7 @@ class JobQueue {
         try {
             const rows = await jobRepo.getNextPendingJob(this.workerId);
             if (rows.length === 0) {
+                // No jobs pending
                 return;
             }
 
@@ -91,8 +113,6 @@ class JobQueue {
                 await this.resize(job);
             } else if (job.type === "change-format") {
                 await this.changeFormat(job);
-            } else if (job.type === "extract-audio") {
-                await this.extractAudio(job);
             } else {
                 throw new Error(`Unknown job type: ${job.type}`);
             }
@@ -182,50 +202,6 @@ class JobQueue {
         }
     }
 
-    async extractAudio(job) {
-        const {videoId} = job;
-        let audioPath;
-
-        try {
-            const video = await videoRepo.getVideoById(videoId);
-            if (!video) {
-                throw new Error(`Video ${videoId} not found`); 
-            } 
-            
-            if (video.extracted_audio === true) {
-                console.log("Audio already extracted for video:", videoId);
-                return; // Skip processing 
-            }
-
-            const videoPath = storage.getFilePath(videoId, `original.${video.extension}`);
-            audioPath = storage.getFilePath(videoId, "audio.aac");
-
-            // Check if video has audio stream or not
-            const hasAudio = await videoProcessor.hasAudioStream(videoPath);
-            if (!hasAudio) {
-                throw new Error("Video does not contain an audio track to extract"); 
-            }
-
-            await videoProcessor.extractAudio(videoPath, audioPath);
-            await videoRepo.updateAudioState(videoId);
-
-            console.log("Audio extraction job completed successfully");
-
-        } catch(error) {
-            console.error("Audio extraction error:", error);
-            
-            // Clean up failed file
-            try {
-                if (audioPath) {
-                    await storage.deleteFile(audioPath); 
-                }
-            } catch (cleanupError) {
-                console.error("Failed to clean up audio file:", cleanupError);
-            }
-            
-            throw error; 
-        }
-    }
 }
 
 module.exports = new JobQueue();

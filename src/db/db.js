@@ -13,6 +13,7 @@ const pool = new Pool({
     ssl: config.server.nodeEnv === "production" ? {rejectUnauthorized: false} : false
 });
 
+
 async function createUserTable() {
     try {
         await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);

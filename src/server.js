@@ -7,13 +7,13 @@ const { globalLoggerMiddleware } = require("./middleware/global-logger.middlewar
 const Auth = require("./controllers/auth.controller.js");
 const Video = require("./controllers/video.controller.js");
 
+
 const PORT = config.server.port;
 
 const omix = new Omix();
 
 omix.use(globalLoggerMiddleware);
-const staticRoot = process.env.STATIC_ROOT || "./public";
-omix.use(static(staticRoot));
+omix.use(static("./public"));
 
 omix.get("/api/user", authMiddleware, (req, res) => {
     res.json({
@@ -21,9 +21,11 @@ omix.get("/api/user", authMiddleware, (req, res) => {
         message: "User is authenticated"
     });
 });
+
 //Auth-routes
 omix.post("/api/login" , Auth.login);
 omix.delete("/api/logout" , authMiddleware , Auth.logout);
+omix.put("/api/user" , authMiddleware , Auth.updateProfile);
 
 //Videos-routes
 omix.get("/api/videos" , authMiddleware , Video.getVideos);
@@ -36,5 +38,11 @@ omix.put("/api/video/change-format" , authMiddleware , Video.changeFormat);
 
 omix.listen(PORT , async () => {
     await generate();
+    // Signal DB readiness to job queue leader
+    try {
+        process.env.DB_READY = '1';
+        // If we're the designated worker and queue is loaded in this process, notify it
+        try { require('./utils/jobQueue').setDbReady?.(); } catch(_) {}
+    } catch(_) {}
     console.log(`Omix server is up on port ${PORT}`);
 });

@@ -19,23 +19,26 @@ const static = (rootDir) => {
         }
 
         let requestPath = req.rawReq.url;
-        
         // Frontend page calls
         if (requestPath === "/" || requestPath === "/profile" || requestPath === "/login" || requestPath === "/new-post") 
             requestPath = "/index.html";
 
         // Resolve static root relative to current working directory if not absolute
         const staticRoot = path.isAbsolute(rootDir) ? rootDir : path.resolve(process.cwd(), rootDir);
-        const fullPath = path.join(staticRoot , requestPath);
+        // Prevent absolute request paths from discarding staticRoot during join
+        const normalizedPath = requestPath.startsWith('/') ? requestPath.slice(1) : requestPath;
+        const fullPath = path.join(staticRoot , normalizedPath);
         const ext = path.extname(fullPath).toLowerCase();
         const contentType = mimeTypes[ext] || "application/octet-stream";
-        
+           
         try {
             const stats = await fs.stat(fullPath);
             //move forward if the the path is directory.
+            
             if (stats.isDirectory()) next();
             res.sendFile(fullPath , contentType);
         } catch(err) {
+            
             if (err.code === "ENOENT") {
                 return next();
             }

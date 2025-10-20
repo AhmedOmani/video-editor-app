@@ -1,5 +1,5 @@
 const globalLoggerMiddleware = (req , res , next) => {
-    console.log(`[GLOBAL]: ${req.rawReq.method} to ${req.rawReq.url}`);
+    console.log(`[GLOBAL]: worker ${process.pid} handles => ${req.rawReq.method} to ${req.rawReq.url}`);
     next();
 }
 

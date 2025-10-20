@@ -32,7 +32,7 @@ services:
       - BASE_PATH=/app/storage
       - FFMPEG_PATH=ffmpeg
       - FFPROBE_PATH=ffprobe
-      - STATIC_ROOT=/app/public
+      - STATIC_ROOT=/app/src/public
     volumes:
       - ./storage:/app/storage
       - /tmp:/tmp

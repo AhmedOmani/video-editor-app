@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = config.jwt.secret;
 const JWT_EXPIRES_IN = config.jwt.expiresIn;
 
-const { isUserExist , saveToken } = require("../repositories/auth.repository.js")
+const { isUserExist, getUserById, getUserByUsername, updateUser } = require("../repositories/auth.repository.js")
 
 const generateToken = (userId) => {
     return jwt.sign({userId} , JWT_SECRET , {expiresIn: JWT_EXPIRES_IN});
@@ -48,7 +48,7 @@ const login = async (req , res) => {
             error: error
         });
     }
-}
+};
 
 const logout = async (req , res) => {
     res.setHeader("Set-Cookie", 
@@ -57,10 +57,54 @@ const logout = async (req , res) => {
     res.json({
         message: "User logged out successfully"
     });
-}
+};
 
+const updateProfile = async (req , res) => {
+    try {
+        const data = await req.body();
+        const { name , username , password } = data ; 
+
+        // Basic validation
+        if (name !== undefined && typeof name !== 'string') {
+            return res.status(400).json({ error: 'Invalid name' });
+        }
+        if (username !== undefined && typeof username !== 'string') {
+            return res.status(400).json({ error: 'Invalid username' });
+        }
+        if (password !== undefined && typeof password !== 'string') {
+            return res.status(400).json({ error: 'Invalid password' });
+        }
+
+        if (username) {
+            const existing = await getUserByUsername(username);
+            if (existing && existing.id !== req.userId) {
+                return res.status(409).json({ error: 'Username already in use' });
+            }
+        }
+
+        let passwordHash;
+        if (password) {
+            passwordHash = await bcrypt.hash(password, 10);
+        }
+
+        const updated = await updateUser(req.userId, { name, username, passwordHash });
+
+        return res.status(200).json({
+            message: 'Profile updated successfully',
+            data: {
+                id: updated.id,
+                name: updated.name,
+                username: updated.username,
+            }
+        });
+    } catch (error) {
+        console.log('[Update Profile Error]: ', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+}
 
 module.exports = {
     login,
-    logout
+    logout,
+    updateProfile
 }

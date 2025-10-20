@@ -107,7 +107,7 @@ const getVideoAssets = async (req , res) => {
 
         let filePath;
         switch (type) {
-            case "thumbnail":
+            case 'thumbnail':
                 filePath = storage.getFilePath(videoId, 'thumbnail.jpg');
                 break;
             case 'original':
@@ -180,7 +180,7 @@ const getVideoAssets = async (req , res) => {
 
         if (type !== "thumbnail") {
             const extension = path.extname(filePath);
-            const downloadedFilename = `${video.name}.${extension}`;
+            const downloadedFilename = `${video.name}${extension}`;
             res.setHeader("Content-Disposition" , `attachment; filename=${downloadedFilename}`);
         }
 
@@ -228,31 +228,32 @@ const extractAudio = async (req, res) => {
     const videoId = params.get("videoId");
 
     try {
-        // Create job ID
-        const jobId = `extract-audio_${videoId}_${Date.now()}`;
+        // Validate video and ensure it actually has an audio stream before queuing
+        const video = await videoRepo.getVideoById(videoId);
+        if (!video) {
+            return res.status(404).json({
+                message: "Video not found!"
+            });
+        }
+        
+        const videoPath = storage.getFilePath(videoId, `original.${video.extension}`);
+        const audioPath = storage.getFilePath(videoId , "audio.aac");
+        const hasAudio = await videoProcessor.hasAudioStream(videoPath);
+        
+        if (!hasAudio) {
+            return res.status(400).json({
+                message: "Video does not contain an audio track to extract"
+            });
+        }
 
-        // Register error callback before adding job
-        errorHandler.registerErrorCallback(jobId, async (error, jobData) => {
-            if (res && !res.headersSent()) {
-                res.status(500).json({
-                    error: "Extract Audio job failed",
-                    message: error.message,
-                    jobId: jobId
-                });
-            }
-        });
+        await videoProcessor.extractAudio(videoPath, audioPath);
+        await videoRepo.updateAudioState(videoId);
 
-        // Add job to queue with job ID
-        await jobQueue.enqueue(jobId, {
-            type: "extract-audio",
-            videoId: videoId
-        });
+        console.log("Audio extraction job completed successfully");
 
-        // Send immediate response
         res.status(200).json({
             status: "success",
-            message: "Audio extraction job queued successfully",
-            jobId: jobId
+            message: "Audio extraction job finished successfully",
         });
 
     } catch (error) {
